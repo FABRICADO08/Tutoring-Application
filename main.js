@@ -1,22 +1,25 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    // --- PASTE YOUR FIREBASE CONFIGURATION OBJECT HERE ---
-    const firebaseConfig = {
-        apiKey: "AIzaSyCgc8xXVs1_DNhKMoUx0kiZnzoL8nIsStM",
-        authDomain: "mentorship-5ce42.firebaseapp.com",
-        projectId: "mentorship-5ce42",
-        storageBucket: "mentorship-5ce42.firebaseapp.com",
-        messagingSenderId: "764728773969",
-        appId: "1:764728773969:web:1ade331d0ce736efe19770",
-        measurementId: "G-PDKKVLP6L6"
-    };
 
-    // --- INITIALIZE FIREBASE ---
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+    // --- CALLING ENVIRONMENT VARIABLES ---
+const firebaseConfig = {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+};
+
+// --- INITIALIZE FIREBASE ---
+// Note: Using the compatibility (v8) syntax based on your snippet
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
+const db = firebase.firestore();
+
 
     // --- PAGE ELEMENTS ---
     const loginPage = document.getElementById('login-page');
