@@ -1,3 +1,7 @@
+import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore";
+
 document.addEventListener('DOMContentLoaded', () => {
 
     // --- 1. FIREBASE CONFIGURATION (Using Netlify/Vite Env Vars) ---
@@ -11,13 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
         measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
     };
 
-    // Initialize Firebase
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
     // --- 2. PAGE ELEMENTS ---
     const loginPage = document.getElementById('login-page');
     const studentDashboardPage = document.getElementById('student-dashboard-page');
