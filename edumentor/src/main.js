@@ -1,10 +1,29 @@
-import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore";
+// Modular Firebase v10 imports via CDN (stable & compatible with v9 style)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    // --- 1. FIREBASE CONFIGURATION (Using Netlify/Vite Env Vars) ---
+    // Firebase Config (using your env vars – fallback to hardcoded for testing if needed)
     const firebaseConfig = {
         apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
         authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -18,13 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    // --- 2. PAGE ELEMENTS ---
+
+    // Page elements
     const loginPage = document.getElementById('login-page');
     const studentDashboardPage = document.getElementById('student-dashboard-page');
     const teacherDashboardPage = document.getElementById('teacher-dashboard-page');
     const loginErrorElement = document.getElementById('login-error');
 
-    // --- 3. UI HELPERS (TOASTS & NAVIGATION) ---
+    // Helpers
     function showToast(message, type = 'success') {
         const toast = document.createElement('div');
         toast.className = `toast`;
@@ -50,27 +70,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return isNaN(date) ? 'N/A' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
 
-    // --- 4. AUTHENTICATION LISTENER ---
-    auth.onAuthStateChanged(async user => {
+    // Auth state listener
+    onAuthStateChanged(auth, async user => {
         if (user) {
-            const userDocRef = db.collection('users').doc(user.uid);
-            const userDoc = await userDocRef.get();
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDocSnap = await getDoc(userDocRef);
 
             let userData;
-            if (!userDoc.exists) {
+            if (!userDocSnap.exists()) {
                 userData = {
                     email: user.email,
                     displayName: user.displayName,
                     photoURL: user.photoURL,
-                    role: 'student', // Default new users to student
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    role: 'student', // Default
+                    createdAt: serverTimestamp()
                 };
-                await userDocRef.set(userData);
+                await setDoc(userDocRef, userData);
             } else {
-                userData = userDoc.data();
+                userData = userDocSnap.data();
             }
 
-            // Redirect based on role
             if (userData.role === 'teacher') {
                 showPage('teacher-dashboard');
                 await setupTeacherDashboard(user);
@@ -83,27 +102,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 5. LOGIN ACTIONS ---
+    // Google login
     document.getElementById('google-login-btn').addEventListener('click', () => {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        auth.signInWithPopup(provider).catch(error => {
+        const provider = new GoogleAuthProvider();
+        signInWithPopup(auth, provider).catch(error => {
             loginErrorElement.style.display = 'block';
             loginErrorElement.textContent = error.message;
             showToast(error.message, 'error');
         });
     });
 
+    // Logout buttons
     document.querySelectorAll('.logout-btn').forEach(btn => {
-        btn.addEventListener('click', () => auth.signOut());
+        btn.addEventListener('click', () => signOut(auth));
     });
 
-    // --- 6. STUDENT DASHBOARD LOGIC ---
+    // Student dashboard
     async function setupStudentDashboard(user) {
         const main = studentDashboardPage.querySelector('main');
         
-        // Fetch Data
-        const slotsSnap = await db.collection('slots').where('status', '==', 'open').get();
-        const bookingsSnap = await db.collection('bookings').where('userId', '==', user.uid).get();
+        const slotsSnap = await getDocs(query(collection(db, 'slots'), where('status', '==', 'open')));
+        const bookingsSnap = await getDocs(query(collection(db, 'bookings'), where('userId', '==', user.uid)));
         
         const myBookings = bookingsSnap.docs.map(d => d.data());
         const openSlots = slotsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -128,19 +147,53 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <td>${slot.teacherName}</td>
                                 <td>${slot.subjectName}</td>
                                 <td>${formatDateTime(slot.date, slot.time)}</td>
-                                <td><button onclick="app.requestSlot('${slot.id}', '${slot.subjectName}', '${slot.teacherName}')" class="badge badge-active" style="border:none; cursor:pointer;">Request</button></td>
+                                <td><button class="badge badge-active request-btn" 
+                                     data-slot-id="${slot.id}"
+                                     data-subject="${slot.subjectName}"
+                                     data-teacher="${slot.teacherName}">Request</button></td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             </div>
         `;
+
+        // Event delegation for Request buttons (functional now)
+        const table = main.querySelector('table');
+        if (table) {
+            table.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('request-btn')) {
+                    const btn = e.target;
+                    const slotId = btn.dataset.slotId;
+                    const subject = btn.dataset.subject;
+                    const teacher = btn.dataset.teacher;
+
+                    try {
+                        await addDoc(collection(db, 'bookings'), {
+                            userId: user.uid,
+                            userName: user.displayName,
+                            slotId,
+                            subjectName: subject,
+                            teacherName: teacher,
+                            status: 'pending',
+                            createdAt: serverTimestamp()
+                        });
+                        showToast("Request sent to " + teacher);
+                        btn.disabled = true;
+                        btn.textContent = "Requested";
+                        btn.style.opacity = "0.6";
+                    } catch (err) {
+                        showToast("Error: " + err.message, 'error');
+                    }
+                }
+            });
+        }
     }
 
-    // --- 7. TEACHER DASHBOARD LOGIC ---
+    // Teacher dashboard
     async function setupTeacherDashboard(user) {
         const main = teacherDashboardPage.querySelector('main');
-        const mySlotsSnap = await db.collection('slots').where('teacherId', '==', user.uid).get();
+        const mySlotsSnap = await getDocs(query(collection(db, 'slots'), where('teacherId', '==', user.uid)));
         const mySlots = mySlotsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
         main.innerHTML = `
@@ -166,37 +219,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('create-slot-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            await db.collection('slots').add({
+            await addDoc(collection(db, 'slots'), {
                 teacherId: user.uid,
                 teacherName: user.displayName,
                 subjectName: document.getElementById('slot-subject').value,
                 date: document.getElementById('slot-date').value,
                 time: document.getElementById('slot-time').value,
                 status: 'open',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                createdAt: serverTimestamp()
             });
             showToast("Slot Created!");
             setupTeacherDashboard(user);
         });
     }
-
-    // --- 8. GLOBAL APP ACTIONS ---
-    window.app = {
-        requestSlot: async (slotId, subject, teacher) => {
-            try {
-                await db.collection('bookings').add({
-                    userId: auth.currentUser.uid,
-                    userName: auth.currentUser.displayName,
-                    slotId: slotId,
-                    subjectName: subject,
-                    teacherName: teacher,
-                    status: 'pending',
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                showToast("Request sent to " + teacher);
-            } catch (err) {
-                showToast("Error: " + err.message, 'error');
-            }
-        }
-    };
 });
